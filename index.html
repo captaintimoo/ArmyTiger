@@ -1,0 +1,201 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>군 관제 예측 대시보드</title>
+    <style>
+        .alert { background-color: #ffcccc; }
+        .report-box { margin-top: 20px; border: 1px solid #ccc; padding: 10px; }
+    </style>
+    <script>
+        const locations = [...Array(26)].map((_, i) => "부대 " + String.fromCharCode(65 + i));
+        const reasons = ["정전", "포트 문제", "네트워크 혼잡", "기타"];
+        
+    let phonebook = {
+
+            "부대 A": [{name: "김상사", phone: "010-1111-2222"}, {name: "박중사", phone: "010-3333-4444"}],
+            "부대 B": [{name: "이소위", phone: "010-5555-6666"}],
+            "부대 C": [{name: "최대위", phone: "010-7777-8888"}, {name: "장소령", phone: "010-9999-0000"}],
+        };
+
+        let logs = [];
+
+        function getRandomLog() {
+            const now = new Date().toLocaleString();
+            const location = locations[Math.floor(Math.random() * locations.length)];
+            const prediction = Math.random() < 0.25 ? 1 : 0;
+            return { timestamp: now, location, prediction, report: "", reason: "" };
+        }
+
+        function updateLogs() {
+            logs.push(getRandomLog());
+            renderLogs();
+        }
+
+        function renderLogs() {
+            const onlyAlert = document.getElementById("only-alert").checked;
+            const keyword = document.getElementById("search-location").value;
+            const tbody = document.getElementById("log-body");
+            tbody.innerHTML = "";
+
+            logs.slice().reverse().forEach(log => {
+                if (onlyAlert && log.prediction !== 1) return;
+                if (keyword && !log.location.includes(keyword)) return;
+
+                const highlight = log.prediction === 1 ? " class='alert'" : "";
+                const report = log.report ? `<br><small>📱 ${log.report} (사유: ${log.reason})</small>` : "";
+
+                tbody.innerHTML += `<tr${highlight}>
+                    <td>${log.timestamp}</td>
+                    <td>${log.location}</td>
+                    <td>${log.prediction}${report}</td>
+                </tr>`;
+            });
+        }
+
+        function reportIssue() {
+            const unit = document.getElementById("report-location").value;
+            const text = document.getElementById("report-text").value;
+            const reason = document.getElementById("report-reason").value;
+
+            for (let i = logs.length - 1; i >= 0; i--) {
+                if (logs[i].location === unit && logs[i].prediction === 1 && !logs[i].report) {
+                    logs[i].report = text;
+                    logs[i].reason = reason;
+                    break;
+                }
+            }
+            renderLogs();
+            alert("📱 관제 보고가 등록되었습니다.");
+            document.getElementById("report-text").value = "";
+        }
+
+        
+    function updatePhonebook() {
+
+            const unit = document.getElementById("report-location").value;
+            const box = document.getElementById("phonebook-list");
+            box.innerHTML = "";
+
+            if (phonebook[unit]) {
+                phonebook[unit].forEach(entry => {
+                    
+    const duty = entry.duty ? " (당직자)" : "";
+    box.innerHTML += `<li>${entry.name}: ${entry.phone}${duty}</li>`;
+
+                });
+            } else {
+                box.innerHTML = "<li>등록된 간부 정보 없음</li>";
+            }
+        }
+
+        function downloadCSV() {
+            let csv = "timestamp,location,prediction,report,reason\n";
+            logs.forEach(l => {
+                csv += `${l.timestamp},${l.location},${l.prediction},${l.report},${l.reason}\n`;
+            });
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = "관제로그.csv";
+            link.click();
+        }
+
+        setInterval(updateLogs, 5000);
+        window.onload = () => {
+            for (let i = 0; i < 10; i++) updateLogs();
+
+            const unitSelect = document.getElementById("report-location");
+            locations.forEach(loc => {
+                const opt = document.createElement("option");
+                opt.value = loc;
+                opt.text = loc;
+                unitSelect.appendChild(opt);
+            });
+
+            const reasonSelect = document.getElementById("report-reason");
+            reasons.forEach(r => {
+                const opt = document.createElement("option");
+                opt.value = r;
+                opt.text = r;
+                reasonSelect.appendChild(opt);
+            });
+
+            updatePhonebook();
+        };
+    
+    function editPhonebookEntry() {
+        const unit = document.getElementById("report-location").value;
+        const name = document.getElementById("edit-name").value.trim();
+        const phone = document.getElementById("edit-phone").value.trim();
+        const duty = document.getElementById("edit-duty").checked;
+
+        if (!unit || !name || !phone) {
+            alert("모든 필드를 입력해주세요.");
+            return;
+        }
+
+        if (!phonebook[unit]) phonebook[unit] = [];
+
+        const existing = phonebook[unit].find(p => p.name === name);
+        if (existing) {
+            existing.phone = phone;
+            existing.duty = duty;
+        } else {
+            phonebook[unit].push({ name, phone, duty });
+        }
+
+        updatePhonebook();
+        alert("간부 정보가 저장되었습니다.");
+        document.getElementById("edit-name").value = "";
+        document.getElementById("edit-phone").value = "";
+        document.getElementById("edit-duty").checked = false;
+    }
+    </script>
+
+</head>
+<body>
+    <h1>🎯 군 관제 예측 대시보드</h1>
+    <label><input type="checkbox" id="only-alert" onchange="renderLogs()"> 관제 로그만 보기</label>
+    <input type="text" id="search-location" oninput="renderLogs()" placeholder="부대명 검색">
+    <button onclick="downloadCSV()">CSV 저장</button>
+
+    <div class="report-box">
+        <h3>📱 관제 보고 등록</h3>
+        <label>부대:
+            <select id="report-location" onchange="updatePhonebook()"></select>
+        </label><br>
+        <label>예상 사유:
+            <select id="report-reason"></select>
+        </label><br>
+        <label>보고 내용:<br>
+            <textarea id="report-text" rows="3" cols="40" placeholder="예: 조치 완료, 전력 복구 등..."></textarea>
+        </label><br>
+        <button onclick="reportIssue()">📱 보고 등록</button>
+    </div>
+
+    <div class="report-box">
+        <h3>📞 부대별 전화번호부</h3>
+        <ul id="phonebook-list">
+            <li>부대를 선택하면 간부 연락처가 표시됩니다.</li>
+        <li><strong>✏️ 아래 입력창으로 이름/번호 수정 가능</strong></li></ul>
+    
+    <div class="report-box">
+        <h3>✏️ 전화번호부 정보 수정</h3>
+        <label>간부 이름: <input type="text" id="edit-name"></label><br>
+        <label>전화번호: <input type="text" id="edit-phone"></label><br>
+        <label><input type="checkbox" id="edit-duty"> 당직자</label><br>
+        <button onclick="editPhonebookEntry()">간부 정보 수정</button>
+    </div>
+
+    <h2>📋 관제 로그</h2>
+
+    <table border="1" width="100%">
+        <thead>
+            <tr><th>시간</th><th>부대</th><th>관제 여부 / 보고</th></tr>
+        </thead>
+        <tbody id="log-body"></tbody>
+    </table>
+</body>
+</html>
